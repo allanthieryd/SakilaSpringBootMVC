@@ -87,7 +87,13 @@
 			<artifactId>opentelemetry-sdk</artifactId>
 			<version>1.68.0</version>
 		</dependency>
-    </dependencies>
+
+		<dependency>
+			<groupId>io.micrometer</groupId>
+			<artifactId>micrometer-registry-prometheus</artifactId>
+			<scope>runtime</scope>
+		</dependency>
+	</dependencies>
 
 	<build>
 		<plugins>
