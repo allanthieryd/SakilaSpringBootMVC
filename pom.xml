@@ -88,6 +88,13 @@
 			<version>1.68.0</version>
 		</dependency>
 
+		<!-- Chronometrage des requetes SQL (metriques sakila_sql_execution_*) -->
+		<dependency>
+			<groupId>net.ttddyy</groupId>
+			<artifactId>datasource-proxy</artifactId>
+			<version>1.10.1</version>
+		</dependency>
+
 		<dependency>
 			<groupId>io.micrometer</groupId>
 			<artifactId>micrometer-registry-prometheus</artifactId>

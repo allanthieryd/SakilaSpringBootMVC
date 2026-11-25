@@ -1,6 +1,7 @@
 package sakila.demo.controller;
 
 import sakila.demo.entity.Rental;
+import sakila.demo.metrics.BusinessMetrics;
 import sakila.demo.repository.PaymentRepository;
 import sakila.demo.repository.RentalRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,8 +23,15 @@ public class RentalController {
     @Autowired
     private PaymentRepository paymentRepository;
 
+    @Autowired
+    private BusinessMetrics businessMetrics;
+
     @GetMapping("/rental-list")
     public String getRentalsBetweenDates(@RequestParam String startDate, @RequestParam String endDate, Model model) {
+        return businessMetrics.track("rental.list", () -> loadRentals(startDate, endDate, model));
+    }
+
+    private String loadRentals(String startDate, String endDate, Model model) {
         LocalDate start = LocalDate.parse(startDate, DateTimeFormatter.ofPattern("yyyy/MM/dd"));
         LocalDate end = LocalDate.parse(endDate, DateTimeFormatter.ofPattern("yyyy/MM/dd"));
 
@@ -32,6 +40,7 @@ public class RentalController {
 
         List<Rental> rentals = rentalRepository.findByRentalDateBetween(start, end);
         model.addAttribute("rentals", rentals);
+        businessMetrics.recordVolume("rental.list", rentals.size());
 
         // Assuming Payment entity and PaymentRepository are also created
         Double totalPayment = paymentRepository.findTotalPaymentBetweenDates(start, end);

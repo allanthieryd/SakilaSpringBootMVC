@@ -1,0 +1,79 @@
+# Seuils d'alerte indicatifs de 03_KPI.pdf (section 10), a adapter a vos SLO.
+groups:
+  - name: sakila-kpi
+    rules:
+      - alert: SakilaDown
+        expr: up{job="spring-boot"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "Application Sakila injoignable (disponibilite)"
+
+      - alert: HttpLatencyP95High
+        expr: histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket[5m]))) > 0.5
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Temps de reponse P95 > 500 ms"
+
+      - alert: HttpLatencyP99High
+        expr: histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket[5m]))) > 1
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Temps de reponse P99 > 1 000 ms"
+
+      - alert: Http5xxRateHigh
+        expr: |
+          100 * sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+          / sum(rate(http_server_requests_seconds_count[5m])) > 1
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "Erreurs HTTP 5xx > 1 %"
+
+      - alert: CpuHigh
+        expr: process_cpu_usage{job="spring-boot"} * 100 > 80
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "CPU > 80 % pendant 5 min"
+
+      - alert: HeapUsageHigh
+        expr: |
+          100 * sum(jvm_memory_used_bytes{job="spring-boot",area="heap"})
+          / sum(jvm_memory_max_bytes{job="spring-boot",area="heap"}) > 85
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Heap > 85 % durablement"
+
+      - alert: GcTimeHigh
+        expr: 100 * sum(rate(jvm_gc_pause_seconds_sum{job="spring-boot"}[5m])) > 10
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "GC > 10 % du temps"
+
+      - alert: DbPoolSaturated
+        expr: |
+          100 * hikaricp_connections_active{job="spring-boot"}
+          / hikaricp_connections_max{job="spring-boot"} > 85
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "Connexions DB utilisees > 85 % du maximum"
+
+      - alert: DbConnectionsPending
+        expr: hikaricp_connections_pending{job="spring-boot"} > 0
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "Des threads attendent une connexion DB"
+
+      - alert: AvailabilityBelowSlo
+        expr: 100 * avg_over_time(up{job="spring-boot"}[1h]) < 99.9
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "Disponibilite < 99,9 % sur 1 h"

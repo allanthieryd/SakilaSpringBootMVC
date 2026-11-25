@@ -1,6 +1,7 @@
 package sakila.demo.service;
 
 import sakila.demo.entity.Actor;
+import sakila.demo.metrics.BusinessMetrics;
 import sakila.demo.repository.ActorRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -15,8 +16,10 @@ import java.util.List;
 public class ActorService {
     private List<Actor> actors;
 
-    public ActorService(ActorRepository actorRepository) {
-        this.actors = actorRepository.findAll();
+    public ActorService(ActorRepository actorRepository, BusinessMetrics businessMetrics) {
+        // "batch" de prechargement : duree totale + volume traite
+        this.actors = businessMetrics.track("actor.preload", actorRepository::findAll);
+        businessMetrics.recordVolume("actor.preload", this.actors.size());
     }
 
     public Page<Actor> getActors(Pageable pageable) {

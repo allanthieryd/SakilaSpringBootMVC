@@ -102,3 +102,68 @@ mvn gatling:test -Dgatling.simulationClass=gatling.sakila.demo.SakilaHeavyReadSi
 ```
 
 The film detail requests use IDs from `src/test/resources/film-ids.csv`. All load-test traffic is read-only (GET requests), so it does not modify the Sakila database.
+
+## Observability (Prometheus + Grafana)
+
+The application exposes its metrics with Spring Boot Actuator and Micrometer. Prometheus scrapes them every 5 seconds and Grafana displays them in a provisioned dashboard built from the KPIs of the `03_KPI.pdf` document.
+
+```
+Gatling --load--> Sakila (Spring Boot :8080) <--scrape-- Prometheus (:9090) --> Grafana (:3000)
+```
+
+### Setup
+
+Prerequisites: JDK 21, Docker, and the Sakila MySQL database running on port 3306 (the application still uses MySQL).
+
+```bash
+# Start Prometheus, Grafana and Alertmanager (the "observability" profile is required)
+docker compose --profile observability up -d prometheus grafana alertmanager
+
+# Start the application (dev profile, port 8080)
+mvn spring-boot:run
+```
+
+Do not run a plain `docker compose up -d`: the compose file also contains a `postgres` service for the lab environment, which Sakila does not use.
+
+| Service      | URL                   | Credentials |
+|--------------|-----------------------|-------------|
+| Application  | http://localhost:8080 | -           |
+| Prometheus   | http://localhost:9090 | -           |
+| Grafana      | http://localhost:3000 | perf / perf |
+| Alertmanager | http://localhost:9093 | -           |
+
+### Exposed metrics
+
+Configured in `application.properties` (Actuator endpoints `health`, `info`, `metrics`, `prometheus`, health probes, HTTP histograms with p50/p95/p99, Hibernate statistics).
+
+| URL                                             | Content                          |
+|-------------------------------------------------|----------------------------------|
+| `/actuator/health` (`/liveness`, `/readiness`)  | Application health               |
+| `/actuator/metrics`                             | List of available metrics        |
+| `/actuator/prometheus`                          | All metrics in Prometheus format |
+
+Custom metrics (`src/main/java/sakila/demo/metrics`):
+
+| Metric                                                          | Meaning                                                    |
+|-----------------------------------------------------------------|------------------------------------------------------------|
+| `sakila_sql_execution_seconds{type,result}`                     | SQL duration, count and errors (JDBC proxy)                |
+| `sakila_transaction_seconds{result}`                            | Transaction duration and count                             |
+| `hibernate_*`                                                   | Hibernate statistics (queries, entities loaded, ...)       |
+| `sakila_operation_total`, `_duration_seconds`, `_inflight`      | Business operations: count, duration, success/failure, in progress |
+| `sakila_records_processed_total`                                | Volume of data processed                                   |
+
+Instrumented operations: `film.list`, `film.view`, `film.add`, `rental.list`, `actor.preload`. HikariCP, JVM, GC and system metrics come from Micrometer.
+
+### Dashboard and alerts
+
+- Grafana: Dashboards > Sakila > *Sakila - KPI de performance*. It shows the 15 priority KPIs, then the API, JVM, GC, database, system, business and availability sections. It is generated from `docker/grafana/provisioning/dashboards/json/sakila-kpi.json`.
+- Alert rules are in `docker/prometheus/alerts.yml` and use the thresholds of the document (P95 > 500 ms, P99 > 1 s, 5xx > 1 %, CPU > 80 %, heap > 85 %, GC > 10 %, DB pool > 85 %, pending connections > 0, availability < 99.9 %). They are visible at http://localhost:9090/alerts.
+- Latency and throughput panels stay empty until there is traffic: run a Gatling simulation (see above) and watch the dashboard on *Last 15 minutes*.
+
+### Limitations and troubleshooting
+
+- RAM, disk I/O and network I/O require `node_exporter` or cAdvisor, which are not installed.
+- Open file descriptors are not available on Windows.
+- Alertmanager has no receiver configured: alerts are only visible in the Prometheus and Alertmanager UIs.
+- Prometheus target DOWN: check that the application runs on port 8080 (the `production` profile uses 8082) at http://localhost:9090/targets.
+- Grafana not reachable: the `observability` compose profile was probably not enabled.

@@ -1,6 +1,7 @@
 package sakila.demo.controller;
 
 import sakila.demo.entity.Film;
+import sakila.demo.metrics.BusinessMetrics;
 import sakila.demo.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Sort;
@@ -30,8 +31,15 @@ public class FilmController {
     @Autowired
     private ActorRepository actorRepository;
 
+    @Autowired
+    private BusinessMetrics businessMetrics;
+
     @GetMapping("/film/{filmId}")
     public String viewFilm(@PathVariable Long filmId, Model model) {
+        return businessMetrics.track("film.view", () -> loadFilm(filmId, model));
+    }
+
+    private String loadFilm(Long filmId, Model model) {
         Optional<Film> filmOptional = filmRepository.findById(filmId);
         if (filmOptional.isPresent()) {
             model.addAttribute("film", filmOptional.get());
@@ -43,9 +51,12 @@ public class FilmController {
 
     @GetMapping("/film-list")
     public String getFilms(Model model) {
-        List<Film> films = filmRepository.findAll(Sort.by("filmId").descending());
-        model.addAttribute("films", films);
-        return "/sakila/film-list.html";
+        return businessMetrics.track("film.list", () -> {
+            List<Film> films = filmRepository.findAll(Sort.by("filmId").descending());
+            model.addAttribute("films", films);
+            businessMetrics.recordVolume("film.list", films.size());
+            return "/sakila/film-list.html";
+        });
     }
 
     @GetMapping("/addFilm")
@@ -60,6 +71,10 @@ public class FilmController {
     @PostMapping("/addFilm")
     public String addFilm(@RequestParam(value = "specialFeatures", required = false) String[] specialFeatures,
                           @ModelAttribute("film") Film film) {
+        return businessMetrics.track("film.add", () -> saveFilm(specialFeatures, film));
+    }
+
+    private String saveFilm(String[] specialFeatures, Film film) {
         if (specialFeatures != null) {
             StringJoiner joiner = new StringJoiner(",");
 
@@ -70,6 +85,7 @@ public class FilmController {
         }
 
         filmRepository.save(film);
+        businessMetrics.recordVolume("film.add", 1);
         return "redirect:/film-list";
     }
 }
